@@ -1,73 +1,118 @@
-# React + TypeScript + Vite
+# Dashboard Clínica Orus
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Um dashboard moderno e interativo para gestão de leads e atendimentos da Clínica Orus, desenvolvido com React, TypeScript e Vite.
 
-Currently, two official plugins are available:
+## 🚀 Características
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Dashboard Analytics**: Visualização de métricas e KPIs em tempo real
+- **Gestão de Leads**: Acompanhamento completo do status e origem dos leads
+- **Chat Interface**: Sistema de atendimento com IA integrada
+- **Análise de Criativos**: Performance tracking de campanhas publicitárias
+- **Relatórios Visuais**: Gráficos interativos com Recharts
+- **Design Responsivo**: Interface adaptável para desktop e mobile
 
-## React Compiler
+## 🛠️ Tecnologias
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **React 19** - Framework frontend
+- **TypeScript** - Tipagem estática
+- **Vite** - Build tool e dev server
+- **Tailwind CSS** - Framework CSS utilitário
+- **Recharts** - Biblioteca de gráficos
+- **Lucide React** - Ícones modernos
+- **Supabase** - Backend e database
+- **React Router** - Roteamento SPA
 
-## Expanding the ESLint configuration
+## 📊 Funcionalidades
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Dashboard Principal
+- KPIs em tempo real (Total de Leads, Leads Repassados, Taxa de Engajamento, Média de Leads/Dia)
+- Gráficos de Status dos Leads
+- Análise de Procedimentos
+- Preferências de Turno
+- Volume por Dia da Cadência
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Análise de Leads
+- **Origem dos Leads**: Diferenciação entre tráfego pago e orgânico
+- **Top Criativos**: Performance de campanhas com cores neon diferenciadas
+- **Status Tracking**: Acompanhamento de "novo lead" vs "repassado"
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Interface de Chat
+- Sistema de mensagens em tempo real
+- Resumo automático com IA
+- Análise de sentimento e qualidade do atendimento
+- Histórico de conversas
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 🎨 Design System
+
+- **Tema**: Navy/Dark theme com cores neon
+- **Cores Principais**:
+  - Cyan: Tráfego Pago
+  - Green: Tráfego Orgânico
+  - Pink: Criativos/Ads
+- **Tipografia**: Outfit (Google Fonts)
+- **Componentes**: Design system consistente
+
+## 🚦 Como Executar
+
+```bash
+# Instalar dependências
+npm install
+
+# Executar em desenvolvimento
+npm run dev
+
+# Build para produção
+npm run build
+
+# Preview do build
+npm run preview
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 📱 Funcionalidades Mobile
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- Sidebar responsiva
+- Navegação otimizada
+- Gráficos adaptáveis
+- Interface touch-friendly
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 🔧 Configuração
+
+O projeto utiliza variáveis de ambiente através do arquivo `.env`:
+
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_key
 ```
+
+## 📈 Estrutura do Projeto
+
+```
+src/
+├── components/         # Componentes reutilizáveis
+│   ├── charts/        # Gráficos especializados
+│   ├── KPICard.tsx    # Cards de métricas
+│   └── Layout.tsx     # Layout principal
+├── pages/             # Páginas da aplicação
+│   ├── Dashboard.tsx  # Dashboard principal
+│   ├── Chat.tsx       # Interface de chat
+│   └── Settings.tsx   # Configurações
+├── lib/               # Utilitários
+│   └── supabase.ts    # Cliente Supabase
+├── types.ts           # Definições TypeScript
+└── assets/            # Assets estáticos
+```
+
+## 🤖 IA Integration
+
+- **Resumo Automático**: Geração de resumos de conversas usando Grok AI
+- **Análise de Atendimento**: Avaliação automática da qualidade
+- **Classificação de Leads**: Identificação automática de tipos de leads
+
+## 📄 Licença
+
+Este projeto é proprietary da Clínica Orus.
+
+---
+
+**Desenvolvido para Clínica Orus** 🏥
+*Dashboard de Gestão de Leads com IA*
