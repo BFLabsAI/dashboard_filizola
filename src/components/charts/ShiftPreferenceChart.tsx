@@ -9,7 +9,16 @@ interface ShiftPreferenceChartProps {
     data: DataPoint[];
 }
 
-const COLORS = ['#f59e0b', '#3b82f6', '#8b5cf6']; // Amber, Blue, Violet
+const COLORS = [
+    '#f59e0b', // Amber
+    '#3b82f6', // Blue
+    '#8b5cf6', // Violet
+    '#10b981', // Emerald
+    '#ec4899', // Pink
+    '#06b6d4', // Cyan
+    '#f97316', // Orange
+    '#6366f1', // Indigo
+];
 
 export function ShiftPreferenceChart({ data }: ShiftPreferenceChartProps) {
     const renderCustomLabel = (entry: any) => {

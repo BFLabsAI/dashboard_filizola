@@ -20,7 +20,7 @@ export function Settings() {
     async function fetchSettings() {
         try {
             const { data, error } = await supabase
-                .from('instancias_dra_aline_chaves')
+                .from('instancias_edi_motos')
                 .select('*')
                 .limit(1);
 
@@ -55,13 +55,13 @@ export function Settings() {
             let error;
             if (settings.id) {
                 const { error: updateError } = await supabase
-                    .from('instancias_dra_aline_chaves')
+                    .from('instancias_edi_motos')
                     .update(payload)
                     .eq('id', settings.id);
                 error = updateError;
             } else {
                 const { error: insertError } = await supabase
-                    .from('instancias_dra_aline_chaves')
+                    .from('instancias_edi_motos')
                     .insert([payload]);
                 error = insertError;
             }
@@ -128,7 +128,7 @@ export function Settings() {
 
             // 1. Total New Leads
             const { count: newLeadsCount, error: newLeadsError } = await supabase
-                .from('leads_dra_aline_chaves')
+                .from('leads_edi_motos')
                 .select('*', { count: 'exact', head: true })
                 .gte('created_at', startISO)
                 .lte('created_at', endISO);
@@ -136,23 +136,23 @@ export function Settings() {
             if (newLeadsError) throw newLeadsError;
 
             // 2. Total Contacted Leads (Active in period)
-            // Using data_ultima_interação. Note: It's a text field in ISO format based on previous check.
+            // Using data_ultima_interacao. Note: It's a text field in ISO format based on previous check.
             // We need to be careful with string comparison, but ISO strings compare correctly lexicographically.
             const { count: contactedCount, error: contactedError } = await supabase
-                .from('leads_dra_aline_chaves')
+                .from('leads_edi_motos')
                 .select('*', { count: 'exact', head: true })
-                .gte('data_ultima_interação', startISO)
-                .lte('data_ultima_interação', endISO);
+                .gte('data_ultima_interacao', startISO)
+                .lte('data_ultima_interacao', endISO);
 
             if (contactedError) throw contactedError;
 
             // 3. Total Repasse
             const { count: repasseCount, error: repasseError } = await supabase
-                .from('leads_dra_aline_chaves')
+                .from('leads_edi_motos')
                 .select('*', { count: 'exact', head: true })
                 .eq('status_lead', 'repassado')
-                .gte('data_ultima_interação', startISO)
-                .lte('data_ultima_interação', endISO);
+                .gte('data_ultima_interacao', startISO)
+                .lte('data_ultima_interacao', endISO);
 
             if (repasseError) throw repasseError;
 
@@ -161,10 +161,10 @@ export function Settings() {
             // We will fetch the 'dia_cadencia' for all contacted leads and aggregate in JS. 
             // If the volume is huge, this is bad, but for a dashboard report it's likely manageable.
             const { data: cadenceData, error: cadenceError } = await supabase
-                .from('leads_dra_aline_chaves')
+                .from('leads_edi_motos')
                 .select('dia_cadencia')
-                .gte('data_ultima_interação', startISO)
-                .lte('data_ultima_interação', endISO);
+                .gte('data_ultima_interacao', startISO)
+                .lte('data_ultima_interacao', endISO);
 
             if (cadenceError) throw cadenceError;
 

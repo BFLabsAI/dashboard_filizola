@@ -12,6 +12,7 @@ export function Chat() {
     const [filter] = useState<'all' | 'repassado' | 'urgente'>('all');
     const [newMessage, setNewMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+    const [chatHistorySessions, setChatHistorySessions] = useState<Set<string>>(new Set());
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [summary, setSummary] = useState('');
     const [loadingSummary, setLoadingSummary] = useState(false);
@@ -112,13 +113,29 @@ export function Chat() {
 
     async function fetchLeads() {
         try {
-            const { data, error } = await supabase
-                .from('leads_dra_aline_chaves')
+            const { data: leadsData, error: leadsError } = await supabase
+                .from('leads_edi_motos')
                 .select('*')
-                .order('data_ultima_interação', { ascending: false });
+                .order('created_at', { ascending: false });
 
-            if (error) throw error;
-            setLeads(data || []);
+            if (leadsError) throw leadsError;
+
+            // Fetch chat sessions to filter leads
+            const { data: chatData, error: chatError } = await supabase
+                .from('n8n_chat_histories_edi_motos')
+                .select('session_id');
+
+            if (chatError) throw chatError;
+
+            // Create a Set of session_ids for efficient lookup
+            // Normalize session_ids to ensure matching (trim and lowercase)
+            const chatSessions = new Set(chatData?.map(c => (c.session_id || '').trim().toLowerCase()) || []);
+
+            // Filter leads that have chat history
+            // We store the set of chat sessions to use in the render filter
+            // This allows us to show ALL leads when searching, but only active ones by default
+            setChatHistorySessions(chatSessions);
+            setLeads(leadsData || []);
         } catch (error) {
             console.error('Error fetching leads:', error);
         }
@@ -129,10 +146,10 @@ export function Chat() {
         try {
             // Assuming session_id in chat history matches telefone in leads
             const { data, error } = await supabase
-                .from('n8n_chat_histories_dra_aline_chaves')
+                .from('n8n_chat_histories_edi_motos')
                 .select('*')
                 .eq('session_id', sessionId)
-                .order('created_at', { ascending: true });
+                .order('id', { ascending: true });
 
             if (error) throw error;
             setChatHistory(data || []);
@@ -142,9 +159,33 @@ export function Chat() {
     }
 
     const filteredLeads = leads.filter(lead => {
-        if (filter === 'repassado') return lead.status_lead === 'repassado';
-        if (filter === 'urgente') return lead.urgencia_caso === 'alta';
-        return true;
+        // Apply filter
+        if (filter === 'repassado' && lead.status_lead !== 'repassado') return false;
+        if (filter === 'urgente') return false; // lead.urgencia_caso removed
+
+        // Apply search term
+        if (searchTerm.trim()) {
+            const search = searchTerm.toLowerCase().trim();
+            const name = (lead.lead_name || '').toLowerCase();
+            const phone = (lead.telefone || '').toLowerCase();
+
+            // Extract only digits for phone number comparison
+            const searchDigits = search.replace(/\D/g, ''); // Remove non-digits from search
+            const phoneDigits = phone.replace(/\D/g, ''); // Remove non-digits from phone
+
+            // Match by name OR by phone (either full phone string or just digits)
+            return name.includes(search) ||
+                phone.includes(search) ||
+                (searchDigits && phoneDigits.includes(searchDigits));
+        }
+
+        // If no search term, ONLY show leads with chat history
+        if (lead.telefone) {
+            const normalizedPhone = lead.telefone.trim().toLowerCase();
+            return chatHistorySessions.has(normalizedPhone);
+        }
+
+        return false;
     });
 
     const handleSendMessage = (e: React.FormEvent) => {
@@ -215,13 +256,13 @@ export function Chat() {
                                             "font-bold truncate text-sm",
                                             selectedLead?.id === lead.id ? "text-white" : "text-slate-300"
                                         )}>
-                                            {lead.lead_name || 'Sem Nome'}
+                                            {lead.lead_name || lead.telefone || 'Sem Nome'}
                                         </span>
                                         <span className="text-xs text-slate-500">10:42</span>
                                     </div>
                                     <p className="text-xs text-slate-400 truncate flex items-center gap-1">
                                         {lead.status_lead === 'novo' && <span className="w-1.5 h-1.5 rounded-full bg-neon-blue"></span>}
-                                        {lead.tipo_procedimento || 'Sem procedimento'}
+                                        {lead.produtos_interesse || 'Sem interesse'}
                                     </p>
                                 </div>
                             </button>
@@ -414,6 +455,55 @@ export function Chat() {
                             </div>
 
                             <div className="space-y-3">
+                                {/* Human Attendance Toggle Section */}
+                                <div className="p-4 bg-navy-900 rounded-2xl border border-navy-700 hover:border-emerald-500/30 transition-colors group">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="p-1.5 bg-navy-800 rounded-lg text-emerald-400 group-hover:bg-emerald-400 group-hover:text-navy-900 transition-colors">
+                                                <User size={16} />
+                                            </div>
+                                            <span className="text-sm font-bold text-white">Atendimento Humano</span>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                if (!selectedLead) return;
+                                                const newValue = !selectedLead.atendimento_humano;
+                                                try {
+                                                    const { error } = await supabase
+                                                        .from('leads_edi_motos')
+                                                        .update({ atendimento_humano: newValue })
+                                                        .eq('id', selectedLead.id);
+
+                                                    if (error) throw error;
+
+                                                    // Update local state
+                                                    setSelectedLead({ ...selectedLead, atendimento_humano: newValue });
+                                                    setLeads(leads.map(l => l.id === selectedLead.id ? { ...l, atendimento_humano: newValue } : l));
+                                                } catch (error) {
+                                                    console.error('Error updating atendimento_humano:', error);
+                                                    alert('Erro ao atualizar atendimento humano');
+                                                }
+                                            }}
+                                            className={clsx(
+                                                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors border-2",
+                                                selectedLead.atendimento_humano
+                                                    ? "bg-emerald-500 border-emerald-400"
+                                                    : "bg-navy-700 border-navy-600"
+                                            )}
+                                        >
+                                            <span
+                                                className={clsx(
+                                                    "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                                                    selectedLead.atendimento_humano ? "translate-x-6" : "translate-x-1"
+                                                )}
+                                            />
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-2">
+                                        {selectedLead.atendimento_humano ? 'Atendimento humano ativado' : 'Atendimento automático'}
+                                    </p>
+                                </div>
+
                                 {/* Summary Section */}
                                 <div className="p-4 bg-navy-900 rounded-2xl border border-navy-700 hover:border-neon-blue/30 transition-colors group">
                                     <div className="flex items-center justify-between mb-3">
@@ -487,9 +577,9 @@ export function Chat() {
                                         <div className="p-1.5 bg-navy-800 rounded-lg text-purple-400 group-hover:bg-purple-400 group-hover:text-navy-900 transition-colors">
                                             <FileText size={16} />
                                         </div>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Procedimento</span>
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Produto</span>
                                     </div>
-                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.tipo_procedimento || 'Não informado'}</p>
+                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.produtos_interesse || 'Não informado'}</p>
                                 </div>
 
                                 <div className="p-3 bg-navy-900 rounded-2xl border border-navy-700 hover:border-neon-blue/30 transition-colors group">
@@ -497,9 +587,9 @@ export function Chat() {
                                         <div className="p-1.5 bg-navy-800 rounded-lg text-amber-400 group-hover:bg-amber-400 group-hover:text-navy-900 transition-colors">
                                             <Clock size={16} />
                                         </div>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Preferência</span>
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Setor</span>
                                     </div>
-                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.turno_preferencia || 'Não informado'}</p>
+                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.setor_principal || 'Não informado'}</p>
                                 </div>
 
                                 <div className="p-3 bg-navy-900 rounded-2xl border border-navy-700 hover:border-neon-blue/30 transition-colors group">
@@ -510,7 +600,7 @@ export function Chat() {
                                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Observações</span>
                                     </div>
                                     <p className="text-xs text-slate-400 leading-relaxed pl-1">
-                                        {selectedLead.observacoes_clinicas || 'Nenhuma observação registrada.'}
+                                        {selectedLead.observacoes || 'Nenhuma observação registrada.'}
                                     </p>
                                 </div>
                             </div>

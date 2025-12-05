@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Layout } from '../components/Layout';
 import { KPICard } from '../components/KPICard';
 import { StatusChart } from '../components/charts/StatusChart';
-import { ProcedureChart } from '../components/charts/ProcedureChart';
+
 import { ShiftPreferenceChart } from '../components/charts/ShiftPreferenceChart';
 import { CadenceVolumeChart } from '../components/charts/CadenceVolumeChart';
 import { Users, UserCheck, MessageCircle, AlertTriangle, Calendar, Download, Target, Leaf, BarChart2 } from 'lucide-react';
@@ -26,7 +26,7 @@ export function Dashboard() {
     async function fetchLeads() {
         try {
             const { data, error } = await supabase
-                .from('leads_dra_aline_chaves')
+                .from('leads_edi_motos')
                 .select('*')
                 .order('created_at', { ascending: false });
 
@@ -68,14 +68,10 @@ export function Dashboard() {
         return acc;
     }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }));
 
-    const procedureData = Object.entries(filteredLeads.reduce((acc, lead) => {
-        const proc = lead.tipo_procedimento || 'Não Informado';
-        acc[proc] = (acc[proc] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }));
+
 
     const shiftData = Object.entries(filteredLeads.reduce((acc, lead) => {
-        const shift = lead.turno_preferencia || 'Não Informado';
+        const shift = lead.setor_principal || 'Não Informado';
         acc[shift] = (acc[shift] || 0) + 1;
         return acc;
     }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }));
@@ -320,16 +316,43 @@ export function Dashboard() {
                     <div className="bg-navy-800 p-6 rounded-3xl border border-navy-700 shadow-xl">
                         <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                             <AlertTriangle className="text-neon-purple" size={20} />
-                            Procedimentos
+                            Últimos Pedidos
                         </h3>
-                        <div className="h-64">
-                            <ProcedureChart data={procedureData} />
+                        <div className="h-64 overflow-y-auto custom-scrollbar pr-2">
+                            <div className="space-y-3">
+                                {filteredLeads
+                                    .filter(l => l.produtos_interesse)
+                                    .slice(0, 5)
+                                    .map((lead, idx) => (
+                                        <div key={idx} className="bg-navy-900/50 p-3 rounded-xl border border-navy-700 flex items-center justify-between group hover:border-neon-purple/30 transition-all">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-lg bg-navy-800 flex items-center justify-center text-neon-purple font-bold text-xs border border-navy-600">
+                                                    {idx + 1}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-white truncate max-w-[120px]" title={lead.produtos_interesse || ''}>
+                                                        {lead.produtos_interesse}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500">{lead.lead_name || lead.telefone || 'Sem nome'}</p>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs text-slate-400 bg-navy-800 px-2 py-1 rounded-lg border border-navy-700">
+                                                {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '-'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                {filteredLeads.filter(l => l.produtos_interesse).length === 0 && (
+                                    <div className="text-center text-slate-500 py-10">
+                                        Nenhum pedido recente.
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="bg-navy-800 p-6 rounded-3xl border border-navy-700 shadow-xl">
                         <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                             <Calendar className="text-neon-pink" size={20} />
-                            Preferência de Turno
+                            Setor Principal
                         </h3>
                         <div className="h-64">
                             <ShiftPreferenceChart data={shiftData} />
@@ -357,7 +380,7 @@ export function Dashboard() {
                             <thead className="bg-navy-900">
                                 <tr>
                                     <th className="px-8 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Nome</th>
-                                    <th className="px-8 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Procedimento</th>
+                                    <th className="px-8 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Produto de Interesse</th>
                                     <th className="px-8 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
                                     <th className="px-8 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Última Interação</th>
                                     <th className="px-8 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Ação</th>
@@ -372,13 +395,13 @@ export function Dashboard() {
                                                     {lead.lead_name ? lead.lead_name.charAt(0).toUpperCase() : 'L'}
                                                 </div>
                                                 <div>
-                                                    <div className="text-sm font-bold text-white">{lead.lead_name || 'Sem Nome'}</div>
+                                                    <div className="text-sm font-bold text-white">{lead.lead_name || lead.telefone || 'Sem Identificação'}</div>
                                                     <div className="text-sm text-slate-500">{lead.telefone}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-8 py-4 whitespace-nowrap text-sm text-slate-400 font-medium">
-                                            {lead.tipo_procedimento || '-'}
+                                            {lead.produtos_interesse || 'Sem interesse'}
                                         </td>
                                         <td className="px-8 py-4 whitespace-nowrap">
                                             <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-md border ${lead.status_lead === 'repassado'
@@ -391,7 +414,7 @@ export function Dashboard() {
                                             </span>
                                         </td>
                                         <td className="px-8 py-4 whitespace-nowrap text-sm text-slate-500">
-                                            {lead.data_ultima_interação ? format(new Date(lead.data_ultima_interação), 'dd/MM/yyyy HH:mm') : '-'}
+                                            {lead.data_ultima_interacao ? new Date(lead.data_ultima_interacao).toLocaleDateString() : 'Nunca'}
                                         </td>
                                         <td className="px-8 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <a href={`/chat?lead=${lead.id}`} className="text-neon-blue hover:text-white font-semibold transition-colors">Abrir Chat</a>
