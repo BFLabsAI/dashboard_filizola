@@ -114,7 +114,7 @@ export function Chat() {
     async function fetchLeads() {
         try {
             const { data: leadsData, error: leadsError } = await supabase
-                .from('leads_edi_motos')
+                .from('leads_filizola')
                 .select('*')
                 .order('created_at', { ascending: false });
 
@@ -122,7 +122,7 @@ export function Chat() {
 
             // Fetch chat sessions to filter leads
             const { data: chatData, error: chatError } = await supabase
-                .from('n8n_chat_histories_edi_motos')
+                .from('n8n_chat_histories_filizola')
                 .select('session_id');
 
             if (chatError) throw chatError;
@@ -146,7 +146,7 @@ export function Chat() {
         try {
             // Assuming session_id in chat history matches telefone in leads
             const { data, error } = await supabase
-                .from('n8n_chat_histories_edi_motos')
+                .from('n8n_chat_histories_filizola')
                 .select('*')
                 .eq('session_id', sessionId)
                 .order('id', { ascending: true });
@@ -470,7 +470,7 @@ export function Chat() {
                                                 const newValue = !selectedLead.atendimento_humano;
                                                 try {
                                                     const { error } = await supabase
-                                                        .from('leads_edi_motos')
+                                                        .from('leads_filizola')
                                                         .update({ atendimento_humano: newValue })
                                                         .eq('id', selectedLead.id);
 
@@ -577,9 +577,9 @@ export function Chat() {
                                         <div className="p-1.5 bg-navy-800 rounded-lg text-purple-400 group-hover:bg-purple-400 group-hover:text-navy-900 transition-colors">
                                             <FileText size={16} />
                                         </div>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Produto</span>
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Beneficio</span>
                                     </div>
-                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.produtos_interesse || 'Não informado'}</p>
+                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.tipo_caso || 'Não informado'}</p>
                                 </div>
 
                                 <div className="p-3 bg-navy-900 rounded-2xl border border-navy-700 hover:border-neon-blue/30 transition-colors group">
@@ -587,22 +587,12 @@ export function Chat() {
                                         <div className="p-1.5 bg-navy-800 rounded-lg text-amber-400 group-hover:bg-amber-400 group-hover:text-navy-900 transition-colors">
                                             <Clock size={16} />
                                         </div>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Setor</span>
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Follow</span>
                                     </div>
-                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.setor_principal || 'Não informado'}</p>
+                                    <p className="text-sm font-medium text-white pl-1">{selectedLead.etapa_follow || 'Não informado'}</p>
                                 </div>
 
-                                <div className="p-3 bg-navy-900 rounded-2xl border border-navy-700 hover:border-neon-blue/30 transition-colors group">
-                                    <div className="flex items-center gap-3 mb-1">
-                                        <div className="p-1.5 bg-navy-800 rounded-lg text-pink-400 group-hover:bg-pink-400 group-hover:text-navy-900 transition-colors">
-                                            <FileText size={16} />
-                                        </div>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Observações</span>
-                                    </div>
-                                    <p className="text-xs text-slate-400 leading-relaxed pl-1">
-                                        {selectedLead.observacoes || 'Nenhuma observação registrada.'}
-                                    </p>
-                                </div>
+
                             </div>
                         </div>
                     </>

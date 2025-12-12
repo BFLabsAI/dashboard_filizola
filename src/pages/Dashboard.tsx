@@ -9,7 +9,7 @@ import { ShiftPreferenceChart } from '../components/charts/ShiftPreferenceChart'
 import { CadenceVolumeChart } from '../components/charts/CadenceVolumeChart';
 import { Users, UserCheck, MessageCircle, AlertTriangle, Calendar, Download, Target, Leaf, BarChart2 } from 'lucide-react';
 import type { Lead } from '../types';
-import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, isWithinInterval, parseISO, startOfDay, endOfDay, differenceInDays } from 'date-fns';
 
 export function Dashboard() {
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -19,14 +19,68 @@ export function Dashboard() {
         end: format(new Date(), 'yyyy-MM-dd')
     });
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
+    const exportToCSV = () => {
+        if (filteredLeads.length === 0) {
+            alert('Nenhum dado para exportar.');
+            return;
+        }
+
+        // Define headers
+        const headers = [
+            'ID', 'Nome', 'Telefone', 'Status', 'Etapa Follow', 'Tipo de Caso',
+            'Setor Principal', 'Produto de Interesse', 'Data de Criação',
+            'Data Última Interação', 'Dia Cadência', 'Atendimento Humano'
+        ].join(',');
+
+        // Format data rows
+        const rows = filteredLeads.map(lead => {
+            const data = [
+                lead.id,
+                `"${lead.lead_name || ''}"`, // Enclose specific string fields in quotes to handle commas
+                `"${lead.telefone || ''}"`,
+                lead.status_lead || '',
+                lead.etapa_follow || '',
+                lead.tipo_caso || '',
+                lead.setor_principal || '',
+                `"${lead.produtos_interesse || ''}"`,
+                lead.created_at ? format(parseISO(lead.created_at), 'dd/MM/yyyy HH:mm:ss') : '',
+                lead.data_ultima_interacao ? format(parseISO(lead.data_ultima_interacao), 'dd/MM/yyyy HH:mm:ss') : '',
+                lead.dia_cadencia || '',
+                lead.atendimento_humano ? 'Sim' : 'Não'
+            ];
+            return data.join(',');
+        });
+
+        // Combine
+        const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join('\n');
+
+        // Create download link
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `leads_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     useEffect(() => {
         fetchLeads();
     }, []);
 
+    // Reset pagination when date filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [dateRange]);
+
     async function fetchLeads() {
         try {
             const { data, error } = await supabase
-                .from('leads_edi_motos')
+                .from('leads_filizola')
                 .select('*')
                 .order('created_at', { ascending: false });
 
@@ -53,13 +107,49 @@ export function Dashboard() {
     const repassedLeads = filteredLeads.filter(l => l.status_lead === 'repassado').length;
     const engagementRate = totalLeads > 0 ? Math.round((repassedLeads / totalLeads) * 100) : 0;
 
-    // Calculate average leads per day based on actual data in table
-    const allLeadsWithDates = leads.filter(lead => lead.created_at);
-    const uniqueDays = new Set(allLeadsWithDates.map(lead => {
-        const date = new Date(lead.created_at);
-        return date.toISOString().split('T')[0]; // YYYY-MM-DD format
-    })).size;
-    const avgLeadsPerDay = uniqueDays > 0 ? Math.round(allLeadsWithDates.length / uniqueDays) : 0;
+    // Calculate average leads per day based on the selected date range duration
+    const startDate = parseISO(dateRange.start);
+    const endDate = parseISO(dateRange.end);
+    // Add 1 to include both start and end dates inclusive
+    const daysInPeriod = Math.max(1, differenceInDays(endDate, startDate) + 1);
+
+    // Average with decimals
+    const avgLeadsPerDay = daysInPeriod > 0
+        ? (filteredLeads.length / daysInPeriod).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+        : '0,0';
+
+    // Calculate Trends (Compare vs Previous Period)
+    const previousStartDate = subDays(startDate, daysInPeriod);
+    const previousEndDate = subDays(endDate, daysInPeriod);
+
+    const previousPeriodLeads = leads.filter(lead => {
+        if (!lead.created_at) return false;
+        return isWithinInterval(parseISO(lead.created_at), {
+            start: startOfDay(previousStartDate),
+            end: endOfDay(previousEndDate)
+        });
+    });
+
+    const previousTotalLeads = previousPeriodLeads.length;
+    const previousRepassedLeads = previousPeriodLeads.filter(l => l.status_lead === 'repassado').length;
+    const previousEngagementRate = previousTotalLeads > 0 ? Math.round((previousRepassedLeads / previousTotalLeads) * 100) : 0;
+
+    const calculateTrend = (current: number, previous: number) => {
+        if (previous === 0) {
+            return current > 0 ? { trend: '+100%', trendUp: true } : { trend: '0%', trendUp: true };
+        }
+        const diff = current - previous;
+        const percentage = Math.round((diff / previous) * 100);
+        const sign = percentage >= 0 ? '+' : '';
+        return {
+            trend: `${sign}${percentage}%`,
+            trendUp: percentage >= 0
+        };
+    };
+
+    const totalLeadsTrend = calculateTrend(totalLeads, previousTotalLeads);
+    const repassedLeadsTrend = calculateTrend(repassedLeads, previousRepassedLeads);
+    const engagementRateTrend = calculateTrend(engagementRate, previousEngagementRate);
 
     // Prepare Chart Data
     const statusData = Object.entries(filteredLeads.reduce((acc, lead) => {
@@ -71,8 +161,8 @@ export function Dashboard() {
 
 
     const shiftData = Object.entries(filteredLeads.reduce((acc, lead) => {
-        const shift = lead.setor_principal || 'Não Informado';
-        acc[shift] = (acc[shift] || 0) + 1;
+        const type = lead.tipo_caso || 'Não Informado';
+        acc[type] = (acc[type] || 0) + 1;
         return acc;
     }, {} as Record<string, number>)).map(([name, value]) => ({ name, value }));
 
@@ -162,9 +252,9 @@ export function Dashboard() {
 
                 {/* KPIs */}
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                    <KPICard title="Total de Leads" value={totalLeads} icon={Users} color="indigo" trend="+12%" trendUp={true} />
-                    <KPICard title="Leads Repassados" value={repassedLeads} icon={UserCheck} color="green" trend="+5%" trendUp={true} />
-                    <KPICard title="Taxa de Engajamento" value={`${engagementRate}% `} icon={MessageCircle} color="violet" trend="-2%" trendUp={false} />
+                    <KPICard title="Total de Leads" value={totalLeads} icon={Users} color="indigo" trend={totalLeadsTrend.trend} trendUp={totalLeadsTrend.trendUp} />
+                    <KPICard title="Leads Repassados" value={repassedLeads} icon={UserCheck} color="green" trend={repassedLeadsTrend.trend} trendUp={repassedLeadsTrend.trendUp} />
+                    <KPICard title="Taxa de Engajamento" value={`${engagementRate}% `} icon={MessageCircle} color="violet" trend={engagementRateTrend.trend} trendUp={engagementRateTrend.trendUp} />
                     <KPICard title="Média de Leads/Dia" value={avgLeadsPerDay} icon={BarChart2} color="orange" />
                 </div>
 
@@ -315,13 +405,13 @@ export function Dashboard() {
                     </div>
                     <div className="bg-navy-800 p-6 rounded-3xl border border-navy-700 shadow-xl">
                         <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                            <AlertTriangle className="text-neon-purple" size={20} />
-                            Últimos Pedidos
+                            <Users className="text-neon-purple" size={20} />
+                            Em Atendimento Humano
                         </h3>
                         <div className="h-64 overflow-y-auto custom-scrollbar pr-2">
                             <div className="space-y-3">
-                                {filteredLeads
-                                    .filter(l => l.produtos_interesse)
+                                {leads
+                                    .filter(l => l.atendimento_humano)
                                     .slice(0, 5)
                                     .map((lead, idx) => (
                                         <div key={idx} className="bg-navy-900/50 p-3 rounded-xl border border-navy-700 flex items-center justify-between group hover:border-neon-purple/30 transition-all">
@@ -330,20 +420,20 @@ export function Dashboard() {
                                                     {idx + 1}
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-medium text-white truncate max-w-[120px]" title={lead.produtos_interesse || ''}>
-                                                        {lead.produtos_interesse}
+                                                    <p className="text-sm font-medium text-white truncate max-w-[120px]" title={lead.lead_name || ''}>
+                                                        {lead.lead_name || 'Sem nome'}
                                                     </p>
-                                                    <p className="text-xs text-slate-500">{lead.lead_name || lead.telefone || 'Sem nome'}</p>
+                                                    <p className="text-xs text-slate-500">{lead.telefone}</p>
                                                 </div>
                                             </div>
-                                            <span className="text-xs text-slate-400 bg-navy-800 px-2 py-1 rounded-lg border border-navy-700">
+                                            <span className="text-xs text-slate-400 bg-navy-800 px-2 py-1 rounded-lg border border-navy-700 whitespace-nowrap flex-shrink-0">
                                                 {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '-'}
                                             </span>
                                         </div>
                                     ))}
-                                {filteredLeads.filter(l => l.produtos_interesse).length === 0 && (
+                                {leads.filter(l => l.atendimento_humano).length === 0 && (
                                     <div className="text-center text-slate-500 py-10">
-                                        Nenhum pedido recente.
+                                        Nenhum lead em atendimento humano.
                                     </div>
                                 )}
                             </div>
@@ -352,7 +442,7 @@ export function Dashboard() {
                     <div className="bg-navy-800 p-6 rounded-3xl border border-navy-700 shadow-xl">
                         <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                             <Calendar className="text-neon-pink" size={20} />
-                            Setor Principal
+                            Tipos de Caso
                         </h3>
                         <div className="h-64">
                             <ShiftPreferenceChart data={shiftData} />
@@ -371,7 +461,10 @@ export function Dashboard() {
                 <div className="bg-navy-800 rounded-3xl border border-navy-700 shadow-xl overflow-hidden">
                     <div className="px-8 py-6 border-b border-navy-700 flex justify-between items-center bg-navy-800/50">
                         <h3 className="text-lg font-bold text-white">Leads Recentes</h3>
-                        <button className="text-sm font-medium text-neon-blue hover:text-white transition-colors flex items-center gap-2">
+                        <button
+                            onClick={exportToCSV}
+                            className="flex items-center gap-2 px-4 py-2 bg-navy-800 text-slate-300 rounded-lg hover:bg-navy-700 hover:text-white transition-colors text-sm font-medium border border-navy-700"
+                        >
                             <Download size={16} /> Exportar CSV
                         </button>
                     </div>
@@ -387,42 +480,70 @@ export function Dashboard() {
                                 </tr>
                             </thead>
                             <tbody className="bg-navy-800 divide-y divide-navy-700">
-                                {filteredLeads.slice(0, 10).map((lead) => (
-                                    <tr key={lead.id} className="hover:bg-navy-700/50 transition-colors duration-150">
-                                        <td className="px-8 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <div className="h-10 w-10 rounded-xl bg-navy-700 flex items-center justify-center text-neon-blue font-bold text-sm mr-4 border border-navy-600">
-                                                    {lead.lead_name ? lead.lead_name.charAt(0).toUpperCase() : 'L'}
+                                {filteredLeads
+                                    .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                                    .map((lead) => (
+                                        <tr key={lead.id} className="hover:bg-navy-700/50 transition-colors duration-150">
+                                            <td className="px-8 py-4 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    <div className="h-10 w-10 rounded-xl bg-navy-700 flex items-center justify-center text-neon-blue font-bold text-sm mr-4 border border-navy-600">
+                                                        {lead.lead_name ? lead.lead_name.charAt(0).toUpperCase() : 'L'}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-white">{lead.lead_name || lead.telefone || 'Sem Identificação'}</div>
+                                                        <div className="text-sm text-slate-500">{lead.telefone}</div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-white">{lead.lead_name || lead.telefone || 'Sem Identificação'}</div>
-                                                    <div className="text-sm text-slate-500">{lead.telefone}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-4 whitespace-nowrap text-sm text-slate-400 font-medium">
-                                            {lead.produtos_interesse || 'Sem interesse'}
-                                        </td>
-                                        <td className="px-8 py-4 whitespace-nowrap">
-                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-md border ${lead.status_lead === 'repassado'
-                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                : lead.status_lead === 'novo'
-                                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                                    : 'bg-slate-700/50 text-slate-400 border-slate-600'
-                                                }`}>
-                                                {lead.status_lead}
-                                            </span>
-                                        </td>
-                                        <td className="px-8 py-4 whitespace-nowrap text-sm text-slate-500">
-                                            {lead.data_ultima_interacao ? new Date(lead.data_ultima_interacao).toLocaleDateString() : 'Nunca'}
-                                        </td>
-                                        <td className="px-8 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <a href={`/chat?lead=${lead.id}`} className="text-neon-blue hover:text-white font-semibold transition-colors">Abrir Chat</a>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="px-8 py-4 whitespace-nowrap text-sm text-slate-400 font-medium">
+                                                {lead.tipo_caso || lead.produtos_interesse || 'Sem interesse'}
+                                            </td>
+                                            <td className="px-8 py-4 whitespace-nowrap">
+                                                <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-md border ${lead.status_lead === 'repassado'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                    : lead.status_lead === 'novo'
+                                                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                                        : 'bg-slate-700/50 text-slate-400 border-slate-600'
+                                                    }`}>
+                                                    {lead.status_lead}
+                                                </span>
+                                            </td>
+                                            <td className="px-8 py-4 whitespace-nowrap text-sm text-slate-500">
+                                                {lead.data_ultima_interacao ? new Date(lead.data_ultima_interacao).toLocaleDateString() : 'Nunca'}
+                                            </td>
+                                            <td className="px-8 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <a href={`/chat?lead=${lead.id}`} className="text-neon-blue hover:text-white font-semibold transition-colors">Abrir Chat</a>
+                                            </td>
+                                        </tr>
+                                    ))}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Pagination Controls */}
+                    <div className="px-8 py-4 border-t border-navy-700 bg-navy-800/50 flex items-center justify-between">
+                        <span className="text-sm text-slate-400">
+                            Mostrando <span className="text-white font-medium">{((currentPage - 1) * itemsPerPage) + 1}</span> a <span className="text-white font-medium">{Math.min(currentPage * itemsPerPage, filteredLeads.length)}</span> de <span className="text-white font-medium">{filteredLeads.length}</span> leads
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1 bg-navy-700 text-slate-300 rounded-lg hover:bg-navy-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
+                            >
+                                Anterior
+                            </button>
+                            <span className="text-sm text-slate-400 px-2">
+                                Página {currentPage} de {Math.max(1, Math.ceil(filteredLeads.length / itemsPerPage))}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredLeads.length / itemsPerPage)))}
+                                disabled={currentPage >= Math.ceil(filteredLeads.length / itemsPerPage)}
+                                className="px-3 py-1 bg-navy-700 text-slate-300 rounded-lg hover:bg-navy-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
+                            >
+                                Próximo
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

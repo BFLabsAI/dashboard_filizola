@@ -13,6 +13,7 @@ export interface Lead {
     dia_cadencia?: string | null;
     metadata?: any;
     atendimento_humano?: boolean | null;
+    tipo_caso?: string | null;
 }
 
 export interface ChatMessage {
